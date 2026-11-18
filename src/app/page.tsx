@@ -1,6 +1,9 @@
+
 import Navbar from "@/components/navbar/Navbar";
 import Banner from "@/components/banner/Banner";
 import FeaturedEquipment from "@/components/equipment/FeaturedEquipment";
+import Categories from "@/components/categories/Categories";
+import WhyChooseUs from "@/components/why-choose-us/WhyChooseUs";
 
 export default function Home() {
   return (
@@ -8,6 +11,8 @@ export default function Home() {
       <Navbar />
       <Banner />
       <FeaturedEquipment />
+      <Categories />
+      <WhyChooseUs />
     </main>
   );
 }

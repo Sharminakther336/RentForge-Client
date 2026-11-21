@@ -1,17 +1,24 @@
 
+
 "use client";
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { Menu, X, Wrench, LayoutDashboard, LogOut } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  Menu,
+  X,
+  Wrench,
+  LayoutDashboard,
+  LogOut,
+} from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 
 const navLinks = [
   { name: "Home", href: "/" },
-  { name: "Equipment", href: "/equipment" },
-  { name: "How It Works", href: "/how-it-works" },
-  { name: "About", href: "/about" },
+  { name: "Equipment", href: "/#equipment" },
+  { name: "How It Works", href: "/#how-it-works" },
+  { name: "About", href: "/#about" },
 ];
 
 type AuthUser = {
@@ -22,12 +29,16 @@ type AuthUser = {
 
 export default function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
 
   const [isOpen, setIsOpen] = useState(false);
   const [user, setUser] = useState<AuthUser | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  // Read login information from localStorage
+  // ========================================
+  // Authentication Sync
+  // ========================================
+
   useEffect(() => {
     const syncAuth = () => {
       const token = localStorage.getItem("rentforge_token");
@@ -35,8 +46,10 @@ export default function Navbar() {
 
       if (token && storedUser) {
         try {
-          setUser(JSON.parse(storedUser));
+          const parsedUser: AuthUser = JSON.parse(storedUser);
+          setUser(parsedUser);
         } catch {
+          localStorage.removeItem("rentforge_token");
           localStorage.removeItem("rentforge_user");
           setUser(null);
         }
@@ -49,7 +62,6 @@ export default function Navbar() {
 
     syncAuth();
 
-    // Update Navbar when login information changes
     window.addEventListener("rentforge-auth-changed", syncAuth);
     window.addEventListener("storage", syncAuth);
 
@@ -59,7 +71,15 @@ export default function Navbar() {
     };
   }, []);
 
-  // Role-based dashboard URL
+  // Close menu after route change
+  useEffect(() => {
+    setIsOpen(false);
+  }, [pathname]);
+
+  // ========================================
+  // Role Based Dashboard
+  // ========================================
+
   const dashboardHref = () => {
     switch (user?.role?.toLowerCase()) {
       case "admin":
@@ -74,7 +94,10 @@ export default function Navbar() {
     }
   };
 
+  // ========================================
   // Logout
+  // ========================================
+
   const handleLogout = () => {
     localStorage.removeItem("rentforge_token");
     localStorage.removeItem("rentforge_user");
@@ -88,19 +111,34 @@ export default function Navbar() {
     router.refresh();
   };
 
+  // ========================================
+  // Navigation Link
+  // ========================================
+
+  const closeMobileMenu = () => {
+    setIsOpen(false);
+  };
+
   const isLoggedIn = mounted && user !== null;
+
+  // ========================================
+  // UI
+  // ========================================
 
   return (
     <header className="sticky top-0 z-50 border-b border-[#E9E0D2] bg-[#F5F1E8]/95 backdrop-blur-md">
+
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-5 py-5 lg:px-8">
 
         {/* Logo */}
+
         <Link
           href="/"
-          onClick={() => setIsOpen(false)}
+          onClick={closeMobileMenu}
+          aria-label="RentForge Home"
           className="flex items-center gap-3"
         >
-          <div className="flex h-13 w-13 items-center justify-center rounded-xl bg-[#24352D]">
+          <div className="flex h-13 w-13 items-center justify-center rounded-xl bg-[#24352D] transition hover:bg-[#C98B52]">
             <Wrench size={27} className="text-white" />
           </div>
 
@@ -110,6 +148,7 @@ export default function Navbar() {
         </Link>
 
         {/* Desktop Navigation */}
+
         <div className="hidden items-center gap-9 md:flex">
           {navLinks.map((link) => (
             <Link
@@ -123,18 +162,22 @@ export default function Navbar() {
         </div>
 
         {/* Desktop Authentication */}
+
         <div className="hidden items-center gap-5 md:flex">
-          {!mounted ? null : isLoggedIn ? (
+          {!mounted ? (
+            <div className="h-11 w-36 animate-pulse rounded-xl bg-[#E9E0D2]" />
+          ) : isLoggedIn ? (
             <>
               <Link
                 href={dashboardHref()}
-                className="flex items-center gap-2 rounded-xl border border-[#24352D] px-5 py-3 text-base font-bold text-[#24352D] transition hover:bg-[#E9E0D2]"
+                className="flex items-center gap-2 rounded-xl border border-[#24352D] px-5 py-3 text-base font-bold text-[#24352D] transition hover:bg-[#E9E0D2] hover:text-[#C98B52]"
               >
                 <LayoutDashboard size={19} />
                 Dashboard
               </Link>
 
               <button
+                type="button"
                 onClick={handleLogout}
                 className="flex items-center gap-2 rounded-xl bg-[#24352D] px-6 py-3.5 text-base font-bold text-white transition hover:bg-[#C98B52]"
               >
@@ -162,20 +205,25 @@ export default function Navbar() {
         </div>
 
         {/* Mobile Menu Button */}
+
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          type="button"
+          onClick={() => setIsOpen((previous) => !previous)}
           className="rounded-xl p-2.5 text-[#24352D] transition hover:bg-[#E9E0D2] md:hidden"
-          aria-label="Toggle navigation menu"
+          aria-label={isOpen ? "Close navigation menu" : "Open navigation menu"}
           aria-expanded={isOpen}
+          aria-controls="mobile-navigation"
         >
           {isOpen ? <X size={29} /> : <Menu size={29} />}
         </button>
       </nav>
 
       {/* Mobile Navigation */}
+
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            id="mobile-navigation"
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
@@ -183,32 +231,40 @@ export default function Navbar() {
             className="overflow-hidden border-t border-[#E9E0D2] bg-[#F5F1E8] md:hidden"
           >
             <div className="flex flex-col gap-5 px-6 py-6">
+
+              {/* Mobile Links */}
+
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   href={link.href}
-                  onClick={() => setIsOpen(false)}
+                  onClick={closeMobileMenu}
                   className="text-lg font-bold text-[#24352D] transition hover:text-[#C98B52]"
                 >
                   {link.name}
                 </Link>
               ))}
 
+              {/* Mobile Authentication */}
+
               <div className="flex flex-col gap-3 border-t border-[#E9E0D2] pt-5">
-                {!mounted ? null : isLoggedIn ? (
+                {!mounted ? (
+                  <div className="h-12 animate-pulse rounded-xl bg-[#E9E0D2]" />
+                ) : isLoggedIn ? (
                   <>
                     <Link
                       href={dashboardHref()}
-                      onClick={() => setIsOpen(false)}
-                      className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#24352D] py-3.5 text-base font-bold text-[#24352D]"
+                      onClick={closeMobileMenu}
+                      className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#24352D] py-3.5 text-base font-bold text-[#24352D] transition hover:bg-[#E9E0D2]"
                     >
                       <LayoutDashboard size={19} />
                       Dashboard
                     </Link>
 
                     <button
+                      type="button"
                       onClick={handleLogout}
-                      className="flex items-center justify-center gap-2 rounded-xl bg-[#24352D] py-3.5 text-base font-bold text-white"
+                      className="flex items-center justify-center gap-2 rounded-xl bg-[#24352D] py-3.5 text-base font-bold text-white transition hover:bg-[#C98B52]"
                     >
                       <LogOut size={18} />
                       Logout
@@ -218,22 +274,23 @@ export default function Navbar() {
                   <div className="flex gap-3">
                     <Link
                       href="/login"
-                      onClick={() => setIsOpen(false)}
-                      className="flex-1 rounded-xl border-2 border-[#24352D] py-3.5 text-center text-base font-bold text-[#24352D]"
+                      onClick={closeMobileMenu}
+                      className="flex-1 rounded-xl border-2 border-[#24352D] py-3.5 text-center text-base font-bold text-[#24352D] transition hover:bg-[#E9E0D2]"
                     >
                       Login
                     </Link>
 
                     <Link
                       href="/register"
-                      onClick={() => setIsOpen(false)}
-                      className="flex-1 rounded-xl bg-[#24352D] py-3.5 text-center text-base font-bold text-white"
+                      onClick={closeMobileMenu}
+                      className="flex-1 rounded-xl bg-[#24352D] py-3.5 text-center text-base font-bold text-white transition hover:bg-[#C98B52]"
                     >
                       Sign Up
                     </Link>
                   </div>
                 )}
               </div>
+
             </div>
           </motion.div>
         )}
@@ -241,4 +298,3 @@ export default function Navbar() {
     </header>
   );
 }
-

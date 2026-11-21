@@ -19,6 +19,12 @@ import {
   Save,
 } from "lucide-react";
 
+import AdminEquipmentPanel from "./AdminEquipmentPanel";
+
+// ========================================
+// TYPES
+// ========================================
+
 type UserRole = "customer" | "owner" | "admin";
 
 type AdminUser = {
@@ -39,11 +45,32 @@ type ManagedUser = {
   createdAt?: string;
 };
 
-type Tab = "Overview" | "Users" | "Equipment" | "Rentals" | "My Profile";
+type Tab =
+  | "Overview"
+  | "Users"
+  | "Equipment"
+  | "Rentals"
+  | "My Profile";
+
+// ========================================
+// API CONFIGURATION
+// ========================================
 
 const API_URL = (
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
 ).replace(/\/+$/, "");
+
+const normalizeRole = (role?: string): UserRole => {
+  if (role === "owner" || role === "admin") {
+    return role;
+  }
+
+  return "customer";
+};
+
+// ========================================
+// NAVIGATION
+// ========================================
 
 const navigation: {
   label: Tab;
@@ -56,13 +83,9 @@ const navigation: {
   { label: "My Profile", icon: UserRound },
 ];
 
-const normalizeRole = (role?: string): UserRole => {
-  if (role === "owner" || role === "admin") {
-    return role;
-  }
-
-  return "customer";
-};
+// ========================================
+// ADMIN DASHBOARD
+// ========================================
 
 export default function AdminDashboard() {
   const router = useRouter();
@@ -72,19 +95,24 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Users Management States
+  // Users states
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [usersMessage, setUsersMessage] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
+  const [draftRoles, setDraftRoles] = useState<
+    Record<string, UserRole>
+  >({});
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(
+    null
+  );
 
-  const [draftRoles, setDraftRoles] = useState<Record<string, UserRole>>({});
-  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // ========================================
-  // Admin Authentication
+  // ADMIN AUTHENTICATION
   // ========================================
 
   useEffect(() => {
@@ -112,13 +140,11 @@ export default function AdminDashboard() {
   }, [router]);
 
   // ========================================
-  // Fetch All Users (Admin API)
+  // FETCH ALL USERS
   // ========================================
 
   useEffect(() => {
-    if (activeTab !== "Users" || loading) {
-      return;
-    }
+    if (activeTab !== "Users" || loading) return;
 
     const controller = new AbortController();
 
@@ -138,7 +164,6 @@ export default function AdminDashboard() {
         const response = await fetch(
           `${API_URL}/api/users/admin/all`,
           {
-            method: "GET",
             headers: {
               Authorization: `Bearer ${token}`,
             },
@@ -184,13 +209,11 @@ export default function AdminDashboard() {
 
     fetchUsers();
 
-    return () => {
-      controller.abort();
-    };
-  }, [activeTab, loading, router]);
+    return () => controller.abort();
+  }, [activeTab, loading, refreshKey, router]);
 
   // ========================================
-  // Logout
+  // LOGOUT
   // ========================================
 
   const handleLogout = () => {
@@ -203,83 +226,38 @@ export default function AdminDashboard() {
   };
 
   // ========================================
-  // Refresh Users
+  // REFRESH USERS
   // ========================================
 
-  const refreshUsers = async () => {
-    setUsersLoading(true);
-    setUsersError("");
-    setUsersMessage("");
-
-    try {
-      const token = localStorage.getItem("rentforge_token");
-
-      if (!token) {
-        router.replace("/login");
-        return;
-      }
-
-      const response = await fetch(
-        `${API_URL}/api/users/admin/all`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Failed to refresh users.");
-      }
-
-      const receivedUsers: ManagedUser[] = Array.isArray(data.users)
-        ? data.users
-        : [];
-
-      setUsers(receivedUsers);
-
-      const initialRoles: Record<string, UserRole> = {};
-
-      receivedUsers.forEach((user) => {
-        initialRoles[user.id] = normalizeRole(user.role);
-      });
-
-      setDraftRoles(initialRoles);
-    } catch (error) {
-      setUsersError(
-        error instanceof Error ? error.message : "Refresh failed."
-      );
-    } finally {
-      setUsersLoading(false);
-    }
+  const refreshUsers = () => {
+    setRefreshKey((previous) => previous + 1);
   };
 
   // ========================================
-  // Change Draft Role
+  // CHANGE DRAFT ROLE
   // ========================================
 
-  const handleRoleChange = (userId: string, role: UserRole) => {
+  const handleRoleChange = (
+    userId: string,
+    role: UserRole
+  ) => {
     setDraftRoles((previous) => ({
       ...previous,
       [userId]: role,
     }));
 
-    setUsersMessage("");
     setUsersError("");
+    setUsersMessage("");
   };
 
   // ========================================
-  // Update User Role
+  // UPDATE USER ROLE
   // ========================================
 
   const handleUpdateRole = async (user: ManagedUser) => {
     const newRole = draftRoles[user.id];
 
-    if (!newRole || newRole === user.role) {
-      return;
-    }
+    if (!newRole || newRole === user.role) return;
 
     if (user.id === "") {
       setUsersError("Invalid user ID.");
@@ -290,9 +268,7 @@ export default function AdminDashboard() {
       `Change ${user.name || user.email}'s role to "${newRole}"?`
     );
 
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     setUpdatingUserId(user.id);
     setUsersError("");
@@ -365,7 +341,7 @@ export default function AdminDashboard() {
   };
 
   // ========================================
-  // Filter Users
+  // FILTER USERS
   // ========================================
 
   const filteredUsers = users.filter((user) => {
@@ -382,7 +358,7 @@ export default function AdminDashboard() {
   });
 
   // ========================================
-  // Loading Screen
+  // LOADING SCREEN
   // ========================================
 
   if (loading) {
@@ -396,7 +372,7 @@ export default function AdminDashboard() {
   }
 
   // ========================================
-  // Overview Content
+  // OVERVIEW
   // ========================================
 
   const renderOverview = () => (
@@ -515,7 +491,7 @@ export default function AdminDashboard() {
   );
 
   // ========================================
-  // Users Management Content
+  // USERS MANAGEMENT
   // ========================================
 
   const renderUsers = () => (
@@ -544,17 +520,13 @@ export default function AdminDashboard() {
             size={17}
             className={usersLoading ? "animate-spin" : ""}
           />
-
           Refresh Users
         </button>
       </div>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         {[
-          {
-            label: "Total Users",
-            value: users.length,
-          },
+          { label: "Total Users", value: users.length },
           {
             label: "Customers",
             value: users.filter((u) => u.role === "customer").length,
@@ -642,9 +614,11 @@ export default function AdminDashboard() {
               size={35}
               className="mx-auto mb-3 text-gray-400"
             />
+
             <p className="font-semibold text-[#24352D]">
               Unable to load users
             </p>
+
             <p className="mt-2 text-sm text-gray-500">
               Check your backend connection and Admin access.
             </p>
@@ -722,6 +696,7 @@ export default function AdminDashboard() {
                             <p className="font-semibold text-[#24352D]">
                               {user.name || "Unnamed User"}
                             </p>
+
                             <p className="text-xs text-gray-400">
                               {user.phone || "No phone"}
                             </p>
@@ -750,7 +725,9 @@ export default function AdminDashboard() {
                       <td className="px-5 py-4">
                         <select
                           value={selectedRole}
-                          disabled={isSelf || updatingUserId === user.id}
+                          disabled={
+                            isSelf || updatingUserId === user.id
+                          }
                           onChange={(event) =>
                             handleRoleChange(
                               user.id,
@@ -773,7 +750,9 @@ export default function AdminDashboard() {
 
                       <td className="px-5 py-4 text-sm text-gray-500">
                         {user.createdAt
-                          ? new Date(user.createdAt).toLocaleDateString()
+                          ? new Date(
+                              user.createdAt
+                            ).toLocaleDateString()
                           : "—"}
                       </td>
 
@@ -811,14 +790,14 @@ export default function AdminDashboard() {
       </div>
 
       <p className="mt-4 text-xs leading-6 text-gray-500">
-        Note: Your own administrator role cannot be changed from this
-        panel. The last administrator cannot be demoted.
+        Note: Your own administrator role cannot be changed from
+        this panel. The last administrator cannot be demoted.
       </p>
     </div>
   );
 
   // ========================================
-  // Profile Content
+  // MY PROFILE
   // ========================================
 
   const renderProfile = () => (
@@ -883,53 +862,42 @@ export default function AdminDashboard() {
   );
 
   // ========================================
-  // Placeholder for Other Sections
+  // PLACEHOLDER FOR RENTALS
   // ========================================
 
-  const renderPlaceholder = () => {
-    const descriptions = {
-      Equipment:
-        "Review equipment listings and manage equipment approval status.",
-      Rentals:
-        "Monitor rental records and booking activity across the platform.",
-    };
+  const renderRentals = () => (
+    <div>
+      <h1 className="text-3xl font-bold text-[#24352D]">
+        Rentals Management
+      </h1>
 
-    const Icon = activeTab === "Equipment" ? Boxes : ClipboardList;
+      <p className="mt-2 text-gray-500">
+        Monitor rental records and booking activity across the platform.
+      </p>
 
-    return (
-      <div>
-        <h1 className="text-3xl font-bold text-[#24352D]">
-          {activeTab}
-        </h1>
+      <div className="mt-8 rounded-2xl border border-[#E9E0D2] bg-white p-8 text-center shadow-sm">
+        <ClipboardList
+          size={35}
+          className="mx-auto mb-4 text-gray-400"
+        />
 
-        <p className="mt-2 text-gray-500">
-          {descriptions[activeTab as "Equipment" | "Rentals"]}
+        <h2 className="text-xl font-bold text-[#24352D]">
+          Rentals Management
+        </h2>
+
+        <p className="mt-3 text-sm text-gray-500">
+          Backend integration is pending for this section.
         </p>
 
-        <div className="mt-8 rounded-2xl border border-[#E9E0D2] bg-white p-8 text-center shadow-sm">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#F5F1E8]">
-            <Icon size={30} className="text-[#24352D]" />
-          </div>
-
-          <h2 className="mt-5 text-xl font-bold text-[#24352D]">
-            {activeTab} Management
-          </h2>
-
-          <p className="mx-auto mt-3 max-w-lg text-sm leading-7 text-gray-500">
-            This section is ready for the next backend integration.
-            Live management actions will be added in the next step.
-          </p>
-
-          <span className="mt-5 inline-block rounded-full bg-[#FFF2E5] px-4 py-2 text-xs font-semibold text-[#9A602D]">
-            Backend integration pending
-          </span>
-        </div>
+        <span className="mt-5 inline-block rounded-full bg-[#FFF2E5] px-4 py-2 text-xs font-semibold text-[#9A602D]">
+          Backend integration pending
+        </span>
       </div>
-    );
-  };
+    </div>
+  );
 
   // ========================================
-  // Render Main Content
+  // RENDER CONTENT
   // ========================================
 
   const renderContent = () => {
@@ -940,12 +908,14 @@ export default function AdminDashboard() {
       case "Users":
         return renderUsers();
 
+      case "Equipment":
+        return <AdminEquipmentPanel />;
+
+      case "Rentals":
+        return renderRentals();
+
       case "My Profile":
         return renderProfile();
-
-      case "Equipment":
-      case "Rentals":
-        return renderPlaceholder();
 
       default:
         return renderOverview();
@@ -953,7 +923,7 @@ export default function AdminDashboard() {
   };
 
   // ========================================
-  // Main Dashboard Layout
+  // MAIN DASHBOARD LAYOUT
   // ========================================
 
   return (
@@ -969,7 +939,9 @@ export default function AdminDashboard() {
       {/* Sidebar */}
       <aside
         className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col bg-[#24352D] text-white transition-transform duration-300 ${
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          sidebarOpen
+            ? "translate-x-0"
+            : "-translate-x-full"
         } lg:translate-x-0`}
       >
         <div className="flex h-20 items-center justify-between border-b border-white/10 px-6">
@@ -980,7 +952,9 @@ export default function AdminDashboard() {
 
             <div>
               <h2 className="text-xl font-bold">RentForge</h2>
-              <p className="text-xs text-gray-300">Admin Panel</p>
+              <p className="text-xs text-gray-300">
+                Admin Panel
+              </p>
             </div>
           </div>
 
@@ -1054,7 +1028,6 @@ export default function AdminDashboard() {
 
       {/* Main Area */}
       <main className="min-h-screen lg:pl-72">
-        {/* Header */}
         <header className="sticky top-0 z-20 flex h-20 items-center justify-between border-b border-[#E9E0D2] bg-[#F5F1E8]/95 px-5 backdrop-blur md:px-8">
           <div className="flex items-center gap-3">
             <button
@@ -1066,7 +1039,10 @@ export default function AdminDashboard() {
             </button>
 
             <div>
-              <p className="text-xs text-gray-500">Dashboard</p>
+              <p className="text-xs text-gray-500">
+                Dashboard
+              </p>
+
               <h2 className="font-bold text-[#24352D]">
                 {activeTab}
               </h2>
@@ -1074,7 +1050,10 @@ export default function AdminDashboard() {
           </div>
 
           <div className="flex items-center gap-3">
-            <ShieldCheck size={21} className="text-[#C98B52]" />
+            <ShieldCheck
+              size={21}
+              className="text-[#C98B52]"
+            />
 
             <span className="hidden text-sm font-semibold sm:inline">
               Admin Account
@@ -1082,12 +1061,10 @@ export default function AdminDashboard() {
           </div>
         </header>
 
-        {/* Page Content */}
         <div className="p-5 md:p-8 lg:p-10">
           {renderContent()}
         </div>
 
-        {/* Footer */}
         <footer className="border-t border-[#E9E0D2] px-8 py-5 text-center text-sm text-gray-500">
           © 2026 RentForge. Admin Workspace.
         </footer>

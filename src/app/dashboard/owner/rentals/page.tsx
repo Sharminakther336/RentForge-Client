@@ -1,493 +1,304 @@
+﻿"use client";
 
-const { ObjectId } = require("mongodb");
-const { getDB } = require("../config/db");
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 
-const DAY_IN_MS = 24 * 60 * 60 * 1000;
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
 
-// ============================================
-// 1. CREATE BOOKING INTENT - CUSTOMER
-// ============================================
-const createBooking = async (req, res) => {
-  try {
-    const {
-      equipmentId,
-      rentalStartDate,
-      rentalEndDate,
-      requiredQuantity,
-      contactNumber,
-      deliveryAddress,
-      additionalNotes,
-    } = req.body || {};
+interface Rental {
+  _id: string;
+  recordType: string;
+  customerInfo?: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  };
+  equipmentInfo?: {
+    name?: string;
+    category?: string;
+    image?: string;
+  };
+  rentalStartDate?: string;
+  rentalEndDate?: string;
+  totalDays?: number;
+  rentalType?: string;
+  requiredQuantity?: number;
+  unitPrice?: number;
+  totalAmount?: number;
+  paymentStatus?: string;
+  bookingStatus?: string;
+  createdAt?: string;
+}
 
-    // Validate required fields
-    if (
-      !equipmentId ||
-      !rentalStartDate ||
-      !rentalEndDate ||
-      requiredQuantity === undefined ||
-      !contactNumber ||
-      !deliveryAddress
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide all required booking information.",
-      });
+export default function OwnerRentalsPage() {
+  const [rentals, setRentals] = useState<Rental[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadRentals = useCallback(async () => {
+    try {
+      setError("");
+
+      const token = localStorage.getItem("rentforge_token");
+      const storedUser = localStorage.getItem("rentforge_user");
+
+      if (!token || !storedUser) {
+        setRentals([]);
+        setError("Please log in to view your rentals.");
+        return;
+      }
+
+      const user = JSON.parse(storedUser);
+
+      if (user.role?.toLowerCase() !== "owner") {
+        setRentals([]);
+        setError("Only owners can access this page.");
+        return;
+      }
+
+      const response = await fetch(
+        `${API_URL.replace(/\/$/, "")}/api/bookings/owner-bookings`,
+        {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          cache: "no-store",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to load rentals.");
+      }
+
+      setRentals(data.bookings || []);
+    } catch (err) {
+      console.error("Owner rentals error:", err);
+      setRentals([]);
+      setError(
+        err instanceof Error ? err.message : "Something went wrong."
+      );
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
+  }, []);
 
-    // Validate equipment ID
-    if (!ObjectId.isValid(equipmentId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid equipment ID.",
-      });
-    }
+  useEffect(() => {
+    loadRentals();
+  }, [loadRentals]);
 
-    // Validate quantity
-    const quantity = Number(requiredQuantity);
+  const formatDate = (value?: string) => {
+    if (!value) return "N/A";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "N/A";
+    return date.toLocaleDateString("en-GB");
+  };
 
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Required quantity must be a positive integer.",
-      });
-    }
+  const formatAmount = (value?: number) =>
+    `৳${Number(value || 0).toLocaleString("en-BD")}`;
 
-    // Validate contact number
-    if (
-      typeof contactNumber !== "string" ||
-      !/^\+?[0-9\s-]{7,20}$/.test(contactNumber.trim())
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide a valid contact number.",
-      });
-    }
+  const pending = rentals.filter(
+    (item) =>
+      item.recordType === "booking_intent" ||
+      item.bookingStatus === "awaiting_payment"
+  ).length;
 
-    // Validate delivery address
-    if (
-      typeof deliveryAddress !== "string" ||
-      !deliveryAddress.trim()
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Delivery address is required.",
-      });
-    }
+  const confirmed = rentals.length - pending;
 
-    // Validate rental dates
-    const startDate = new Date(rentalStartDate);
-    const endDate = new Date(rentalEndDate);
-
-    if (
-      Number.isNaN(startDate.getTime()) ||
-      Number.isNaN(endDate.getTime())
-    ) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide valid rental dates.",
-      });
-    }
-
-    const now = new Date();
-
-    if (startDate.getTime() < now.getTime()) {
-      return res.status(400).json({
-        success: false,
-        message: "Rental start date cannot be in the past.",
-      });
-    }
-
-    if (endDate <= startDate) {
-      return res.status(400).json({
-        success: false,
-        message: "End date must be after start date.",
-      });
-    }
-
-    // Calculate total rental days
-    const totalDays = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / DAY_IN_MS
-    );
-
-    const db = getDB();
-
-    // Find approved equipment
-    const equipment = await db.collection("equipment").findOne({
-      _id: new ObjectId(equipmentId),
-      status: "approved",
-    });
-
-    if (!equipment) {
-      return res.status(404).json({
-        success: false,
-        message: "Equipment not found or not approved.",
-      });
-    }
-
-    // Calculate rental units
-    let rentalUnits;
-
-    switch (equipment.rentalType) {
-      case "Daily":
-        rentalUnits = totalDays;
-        break;
-
-      case "Weekly":
-        rentalUnits = Math.ceil(totalDays / 7);
-        break;
-
-      case "Monthly":
-        rentalUnits = Math.ceil(totalDays / 30);
-        break;
-
-      default:
-        return res.status(400).json({
-          success: false,
-          message: "Invalid equipment rental type.",
-        });
-    }
-
-    // Check existing bookings for overlapping dates
-    const activeBookings = await db.collection("bookings").find({
-      equipmentId: new ObjectId(equipmentId),
-      bookingStatus: { $ne: "cancelled" },
-      rentalStartDate: { $lt: endDate },
-      rentalEndDate: { $gt: startDate },
-    }).toArray();
-
-    // Check active booking intents
-    const activeIntents = await db.collection("bookingIntents").find({
-      equipmentId: new ObjectId(equipmentId),
-      status: "awaiting_payment",
-      expiresAt: { $gt: now },
-      rentalStartDate: { $lt: endDate },
-      rentalEndDate: { $gt: startDate },
-    }).toArray();
-
-    const bookedQuantity = activeBookings.reduce(
-      (total, booking) =>
-        total + Number(booking.requiredQuantity || 0),
+  const paidRevenue = rentals
+    .filter((item) => item.paymentStatus === "paid")
+    .reduce(
+      (total, item) => total + Number(item.totalAmount || 0),
       0
     );
 
-    const reservedQuantity = activeIntents.reduce(
-      (total, intent) =>
-        total + Number(intent.requiredQuantity || 0),
-      0
-    );
+  return (
+    <main className="min-h-screen bg-[#F5F1E8] p-4 text-[#24352D] sm:p-6 lg:p-8">
+      <div className="mx-auto max-w-7xl">
 
-    const remainingQuantity =
-      Number(equipment.availableQuantity) -
-      bookedQuantity -
-      reservedQuantity;
+        <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <Link
+              href="/dashboard/owner"
+              className="mb-3 inline-block font-semibold text-[#C98B52] hover:underline"
+            >
+              ← Back to Dashboard
+            </Link>
 
-    if (quantity > remainingQuantity) {
-      return res.status(409).json({
-        success: false,
-        message: "Not enough equipment available for these dates.",
-        availableQuantity: Math.max(0, remainingQuantity),
-      });
-    }
+            <h1 className="text-3xl font-extrabold">
+              Equipment Rentals
+            </h1>
 
-    // Calculate booking amount
-    const unitPrice = Number(equipment.rentalPrice);
+            <p className="mt-2 text-sm text-gray-600">
+              Manage customer rental requests and bookings.
+            </p>
+          </div>
 
-    const totalAmount =
-      unitPrice * rentalUnits * quantity;
+          <button
+            onClick={() => {
+              setRefreshing(true);
+              loadRentals();
+            }}
+            disabled={refreshing}
+            className="rounded-xl bg-[#24352D] px-5 py-3 font-semibold text-white disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing..." : "↻ Refresh Rentals"}
+          </button>
+        </div>
 
-    if (!Number.isFinite(totalAmount) || totalAmount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: "Unable to calculate booking amount.",
-      });
-    }
+        <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            { label: "Total Rentals", value: rentals.length },
+            { label: "Awaiting Payment", value: pending },
+            { label: "Confirmed Rentals", value: confirmed },
+            { label: "Paid Revenue", value: formatAmount(paidRevenue) },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-2xl border border-[#E9E0D2] bg-white p-6 shadow-sm"
+            >
+              <p className="text-sm text-gray-500">{item.label}</p>
+              <h2 className="mt-3 text-3xl font-extrabold">
+                {item.value}
+              </h2>
+            </div>
+          ))}
+        </div>
 
-    // Create temporary booking intent
-    // Final booking will be created after successful payment
-    const bookingIntent = {
-      equipmentId: new ObjectId(equipmentId),
-      customerId: new ObjectId(req.user.id),
-      ownerId: equipment.ownerId,
-      equipmentName: equipment.name,
+        <section className="overflow-hidden rounded-2xl border border-[#E9E0D2] bg-white shadow-sm">
+          <div className="border-b border-gray-100 px-6 py-5">
+            <h2 className="text-xl font-bold">Rental Requests</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Customer, equipment and payment information
+            </p>
+          </div>
 
-      rentalStartDate: startDate,
-      rentalEndDate: endDate,
+          {loading ? (
+            <div className="p-12 text-center text-gray-500">
+              Loading rentals...
+            </div>
+          ) : error ? (
+            <div className="p-10 text-center text-red-600">
+              {error}
+            </div>
+          ) : rentals.length === 0 ? (
+            <div className="p-16 text-center">
+              <div className="text-5xl">📦</div>
+              <h3 className="mt-5 text-xl font-bold">
+                No Rentals Yet
+              </h3>
+              <p className="mt-2 text-sm text-gray-500">
+                Customer rental requests will appear here.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[1000px] text-left text-sm">
+                <thead className="bg-[#F5F1E8] text-[#24352D]">
+                  <tr>
+                    <th className="px-5 py-4">Equipment</th>
+                    <th className="px-5 py-4">Customer</th>
+                    <th className="px-5 py-4">Rental Period</th>
+                    <th className="px-5 py-4">Quantity</th>
+                    <th className="px-5 py-4">Amount</th>
+                    <th className="px-5 py-4">Payment</th>
+                    <th className="px-5 py-4">Booking</th>
+                  </tr>
+                </thead>
 
-      totalDays,
-      rentalUnits,
-      rentalType: equipment.rentalType,
-      requiredQuantity: quantity,
-      unitPrice,
-      totalAmount,
+                <tbody>
+                  {rentals.map((item) => {
+                    const isIntent =
+                      item.recordType === "booking_intent";
 
-      contactNumber: contactNumber.trim(),
-      deliveryAddress: deliveryAddress.trim(),
-      additionalNotes: additionalNotes || "",
+                    const payment =
+                      item.paymentStatus || (isIntent ? "pending" : "unknown");
 
-      status: "awaiting_payment",
+                    const booking =
+                      item.bookingStatus ||
+                      (isIntent ? "awaiting_payment" : "confirmed");
 
-      createdAt: now,
-      updatedAt: now,
-      expiresAt: new Date(now.getTime() + 15 * 60 * 1000),
-    };
+                    return (
+                      <tr
+                        key={item._id}
+                        className="border-t border-gray-100 hover:bg-gray-50"
+                      >
+                        <td className="px-5 py-5">
+                          <p className="font-bold">
+                            {item.equipmentInfo?.name || "Equipment"}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {item.equipmentInfo?.category || item.rentalType || "N/A"}
+                          </p>
+                        </td>
 
-    const result = await db
-      .collection("bookingIntents")
-      .insertOne(bookingIntent);
+                        <td className="px-5 py-5">
+                          <p className="font-semibold">
+                            {item.customerInfo?.name || "Customer"}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {item.customerInfo?.email || "Email unavailable"}
+                          </p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {item.customerInfo?.phone || ""}
+                          </p>
+                        </td>
 
-    return res.status(201).json({
-      success: true,
-      message: "Booking details calculated successfully. Proceed to payment.",
+                        <td className="px-5 py-5">
+                          <p>{formatDate(item.rentalStartDate)}</p>
+                          <p className="mt-1 text-xs text-gray-500">
+                            To {formatDate(item.rentalEndDate)}
+                          </p>
+                          {item.totalDays && (
+                            <p className="mt-1 text-xs text-gray-400">
+                              {item.totalDays} days
+                            </p>
+                          )}
+                        </td>
 
-      bookingIntent: {
-        id: result.insertedId.toString(),
-        equipmentName: equipment.name,
-        rentalStartDate: startDate,
-        rentalEndDate: endDate,
-        totalDays,
-        rentalUnits,
-        rentalType: equipment.rentalType,
-        requiredQuantity: quantity,
-        unitPrice,
-        totalAmount,
-        status: "awaiting_payment",
-        expiresAt: bookingIntent.expiresAt,
-      },
-    });
-  } catch (error) {
-    console.error("Create booking error:", error.message);
+                        <td className="px-5 py-5">
+                          {item.requiredQuantity ?? 0}
+                        </td>
 
-    return res.status(500).json({
-      success: false,
-      message: "Failed to create booking request.",
-    });
-  }
-};
+                        <td className="px-5 py-5 font-bold">
+                          {formatAmount(item.totalAmount)}
+                        </td>
 
+                        <td className="px-5 py-5">
+                          <span className="rounded-full bg-orange-100 px-3 py-1.5 text-xs font-semibold capitalize text-orange-700">
+                            {payment.replace(/_/g, " ")}
+                          </span>
+                        </td>
 
-// ============================================
-// 2. GET CUSTOMER'S RENTAL HISTORY
-// ============================================
-const getMyBookings = async (req, res) => {
-  try {
-    const db = getDB();
+                        <td className="px-5 py-5">
+                          <span
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold capitalize ${
+                              isIntent
+                                ? "bg-orange-100 text-orange-700"
+                                : "bg-green-100 text-green-700"
+                            }`}
+                          >
+                            {booking.replace(/_/g, " ")}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
-    const bookings = await db
-      .collection("bookings")
-      .find({
-        customerId: new ObjectId(req.user.id),
-      })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    return res.status(200).json({
-      success: true,
-      total: bookings.length,
-      bookings,
-    });
-  } catch (error) {
-    console.error("Get customer bookings error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to retrieve rental history.",
-    });
-  }
-};
-
-
-// ============================================
-// 3. GET OWNER'S RENTAL BOOKINGS
-// ============================================
-const getOwnerBookings = async (req, res) => {
-  try {
-    const db = getDB();
-
-    const ownerId = new ObjectId(req.user.id);
-    const now = new Date();
-
-    // Get completed payment bookings
-    const [bookings, intents] = await Promise.all([
-      db.collection("bookings")
-        .find({ ownerId })
-        .sort({ createdAt: -1 })
-        .toArray(),
-
-      // Get active payment intents
-      db.collection("bookingIntents")
-        .find({
-          ownerId,
-          status: "awaiting_payment",
-          expiresAt: { $gt: now },
-        })
-        .sort({ createdAt: -1 })
-        .toArray(),
-    ]);
-
-    // Combine both records
-    const records = [
-      ...bookings.map((item) => ({
-        ...item,
-        recordType: "booking",
-      })),
-
-      ...intents.map((item) => ({
-        ...item,
-        recordType: "booking_intent",
-      })),
-    ];
-
-    // Collect Customer IDs
-    const customerIds = [
-      ...new Set(
-        records
-          .map((item) => item.customerId?.toString())
-          .filter((id) => id && ObjectId.isValid(id))
-      ),
-    ].map((id) => new ObjectId(id));
-
-    // Collect Equipment IDs
-    const equipmentIds = [
-      ...new Set(
-        records
-          .map((item) => item.equipmentId?.toString())
-          .filter((id) => id && ObjectId.isValid(id))
-      ),
-    ].map((id) => new ObjectId(id));
-
-    // Load customer and equipment information
-    const [customers, equipmentList] = await Promise.all([
-      customerIds.length
-        ? db.collection("users")
-            .find({
-              _id: { $in: customerIds },
-            })
-            .project({
-              name: 1,
-              email: 1,
-              phone: 1,
-            })
-            .toArray()
-        : [],
-
-      equipmentIds.length
-        ? db.collection("equipment")
-            .find({
-              _id: { $in: equipmentIds },
-            })
-            .project({
-              name: 1,
-              category: 1,
-              image: 1,
-            })
-            .toArray()
-        : [],
-    ]);
-
-    // Create lookup maps
-    const customerMap = new Map(
-      customers.map((item) => [
-        item._id.toString(),
-        item,
-      ])
-    );
-
-    const equipmentMap = new Map(
-      equipmentList.map((item) => [
-        item._id.toString(),
-        item,
-      ])
-    );
-
-    // Prepare Owner Rental Records
-    const result = records.map((item) => {
-      const customer = customerMap.get(
-        item.customerId?.toString()
-      );
-
-      const equipment = equipmentMap.get(
-        item.equipmentId?.toString()
-      );
-
-      const isIntent =
-        item.recordType === "booking_intent";
-
-      return {
-        _id: item._id.toString(),
-
-        recordType: item.recordType,
-
-        customerInfo: {
-          name: customer?.name || "Customer",
-          email: customer?.email || "",
-          phone:
-            item.contactNumber ||
-            customer?.phone ||
-            "",
-        },
-
-        equipmentInfo: {
-          name:
-            item.equipmentName ||
-            equipment?.name ||
-            "Equipment",
-
-          category: equipment?.category || "",
-          image: equipment?.image || "",
-        },
-
-        rentalStartDate: item.rentalStartDate,
-        rentalEndDate: item.rentalEndDate,
-
-        totalDays: item.totalDays,
-        rentalUnits: item.rentalUnits,
-        rentalType: item.rentalType,
-
-        requiredQuantity: item.requiredQuantity,
-
-        unitPrice: item.unitPrice,
-        totalAmount: item.totalAmount,
-
-        paymentStatus:
-          item.paymentStatus ||
-          (isIntent ? "pending" : "paid"),
-
-        bookingStatus:
-          item.bookingStatus ||
-          (isIntent ? "awaiting_payment" : "confirmed"),
-
-        createdAt: item.createdAt,
-      };
-    });
-
-    // Sort newest booking first
-    result.sort(
-      (a, b) =>
-        new Date(b.createdAt).getTime() -
-        new Date(a.createdAt).getTime()
-    );
-
-    return res.status(200).json({
-      success: true,
-      total: result.length,
-      bookings: result,
-    });
-  } catch (error) {
-    console.error("Get owner bookings error:", error.message);
-
-    return res.status(500).json({
-      success: false,
-      message: "Failed to retrieve owner rental records.",
-    });
-  }
-};
-
-
-// ============================================
-// EXPORT CONTROLLERS
-// ============================================
-module.exports = {
-  createBooking,
-  getMyBookings,
-  getOwnerBookings,
-};
+        <footer className="mt-8 border-t border-[#E9E0D2] pt-6 text-sm text-gray-500">
+          © 2026 RentForge. Owner Workspace.
+        </footer>
+      </div>
+    </main>
+  );
+}

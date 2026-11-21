@@ -1,36 +1,199 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+# RentForge – Equipment Rental Platform
 
-First, run the development server:
+RentForge is a modern equipment rental marketplace that connects equipment owners with customers. Users can explore equipment, compare rental prices, and manage equipment rental activities through a role-based platform.
+
+## Live Website
+
+- **Live Site:** https://rent-forge-client-eight.vercel.app/
+- **Backend API:** https://rentforge-server.onrender.com
+
+## GitHub Repositories
+
+- **Client:** https://github.com/Sharminakther336/RentForge-Client
+- **Server:** https://github.com/Sharminakther336/RentForge-Server
+
+## Technology Stack
+
+### Frontend
+- Next.js (App Router)
+- React
+- TypeScript
+- Tailwind CSS
+- Framer Motion
+- Lucide React
+
+### Backend
+- Node.js
+- Express.js
+- MongoDB
+- JWT Authentication
+- bcryptjs
+- Stripe SDK
+
+## Key Features
+
+- Responsive and modern user interface.
+- Email and password authentication.
+- JWT-based authentication and role-based access control.
+- Three user roles: Customer, Owner, and Admin.
+- Featured equipment and equipment categories.
+- Equipment search, filtering, and sorting.
+- Dynamic equipment details pages.
+- Owner dashboard for adding and managing equipment.
+- Admin dashboard for managing users and equipment.
+- Equipment approval and rejection system.
+- Customer, Owner, and Admin dashboards.
+- Responsive navigation with mobile menu.
+- Animated sections using Framer Motion.
+
+## User Roles
+
+| Role | Main Responsibilities |
+|---|---|
+| Customer | Browse equipment and access customer dashboard |
+| Owner | Add and manage equipment and rental activities |
+| Admin | Manage users and approve or manage equipment |
+
+## Main Packages Used
+
+### Frontend Packages
+- next
+- react
+- react-dom
+- typescript
+- tailwindcss
+- framer-motion
+- lucide-react
+
+### Backend Packages
+- express
+- mongodb
+- jsonwebtoken
+- bcryptjs
+- cors
+- dotenv
+- stripe
+- nodemon
+
+## Project Structure
+
+### Client
+```text
+rentforge-client/
+├── src/
+│   ├── app/
+│   │   ├── dashboard/
+│   │   ├── equipment/
+│   │   ├── login/
+│   │   ├── register/
+│   │   └── page.tsx
+│   ├── components/
+│   │   ├── banner/
+│   │   ├── navbar/
+│   │   ├── equipment/
+│   │   ├── categories/
+│   │   └── footer/
+│   └── ...
+├── public/
+├── .env.local
+└── package.json
+```
+
+### Server
+```text
+rentforge-server/
+├── controllers/
+├── routes/
+├── middleware/
+├── config/
+├── server.js
+├── .env
+└── package.json
+```
+
+## Installation and Setup
+
+### 1. Clone the Client
+
+```bash
+git clone https://github.com/Sharminakther336/RentForge-Client.git
+cd RentForge-Client
+npm install
+```
+
+Create a `.env.local` file:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
+
+Start the frontend:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Frontend runs at:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+http://localhost:3000
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### 2. Clone the Server
 
-## Learn More
+Open another terminal:
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+git clone https://github.com/Sharminakther336/RentForge-Server.git
+cd RentForge-Server
+npm install
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Create a `.env` file:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+PORT=5000
+MONGODB_URI=your_mongodb_connection_string
+DB_NAME=rentforge
+JWT_SECRET=your_jwt_secret
+CLIENT_URL=http://localhost:3000
+```
 
-## Deploy on Vercel
+Start the backend:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+npm run dev
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Backend runs at:
+
+http://localhost:5000
+
+## Environment Variables
+
+Never commit `.env` or `.env.local` files to GitHub.
+
+Keep MongoDB credentials, JWT secrets, and other private configuration values secure.
+
+## Development
+
+Build the frontend:
+
+```bash
+npm run build
+```
+
+Start the production frontend:
+
+```bash
+npm start
+```
+
+## Project Status
+
+RentForge is under active development. Equipment browsing, authentication, role-based dashboards, and equipment management are implemented. Booking, payment, analytics, and other remaining assignment features are being developed and tested.
+
+## Author
+
+**RentForge Project**
+
+Equipment Rental Platform – Assignment 9, Category 003.

@@ -7,6 +7,7 @@ import Link from "next/link";
 
 import Navbar from "@/components/navbar/Navbar";
 import Footer from "@/components/footer/Footer";
+import BookingForm from "@/components/booking/BookingForm";
 
 import {
   ArrowLeft,
@@ -19,7 +20,6 @@ import {
   LoaderCircle,
   CheckCircle2,
   Wrench,
-  ClipboardList,
 } from "lucide-react";
 
 // ========================================
@@ -43,12 +43,10 @@ type Equipment = {
   imageUrl?: string;
   equipmentImage?: string;
   rentalTerms?: string;
-
   ownerInfo?: {
     name?: string;
     email?: string;
   };
-
   createdAt?: string;
 };
 
@@ -207,14 +205,11 @@ export default function EquipmentDetailsPage() {
 
         // Fetch MongoDB equipment
 
-        const response = await fetch(
-          `${API_URL}/api/equipment`,
-          {
-            method: "GET",
-            cache: "no-store",
-            signal: controller.signal,
-          }
-        );
+        const response = await fetch(`${API_URL}/api/equipment`, {
+          method: "GET",
+          cache: "no-store",
+          signal: controller.signal,
+        });
 
         const data = await response.json();
 
@@ -371,6 +366,13 @@ export default function EquipmentDetailsPage() {
     equipment.id?.startsWith("featured-")
   );
 
+  const databaseEquipmentId = String(
+    equipment._id || equipment.id || equipmentId
+  );
+
+  const isValidDatabaseId =
+    /^[a-fA-F0-9]{24}$/.test(databaseEquipmentId);
+
   // ========================================
   // Details Page UI
   // ========================================
@@ -404,7 +406,6 @@ export default function EquipmentDetailsPage() {
 
             <p className="mt-4 flex items-center gap-2 text-gray-300">
               <MapPin size={18} />
-
               {equipment.location || "Location not provided"}
             </p>
           </div>
@@ -680,7 +681,7 @@ export default function EquipmentDetailsPage() {
                   )}
                 </div>
 
-                {/* Action */}
+                {/* Booking Action */}
 
                 {quantity !== undefined && quantity <= 0 ? (
                   <button
@@ -690,20 +691,34 @@ export default function EquipmentDetailsPage() {
                   >
                     Currently Unavailable
                   </button>
+                ) : isFeatured || !isValidDatabaseId ? (
+                  <div className="mt-7 rounded-xl border border-[#E9E0D2] bg-[#F5F1E8] p-4">
+                    <p className="text-sm leading-6 text-gray-600">
+                      This is a featured demonstration listing. Please select an approved database listing to make a booking.
+                    </p>
+                  </div>
                 ) : (
-                  <Link
-                    href="/equipment"
-                    className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-[#24352D] px-6 py-4 font-bold text-white transition hover:bg-[#C98B52] hover:text-[#24352D]"
-                  >
-                    Explore More Equipment
-                    <ArrowRight size={19} />
-                  </Link>
+                  <BookingForm
+                    equipmentId={databaseEquipmentId}
+                    equipmentName={equipment.name}
+                    rentalPrice={equipment.rentalPrice || 0}
+                    rentalType={equipment.rentalType}
+                    availableQuantity={equipment.availableQuantity}
+                  />
                 )}
+
+                <Link
+                  href="/equipment"
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl border border-[#24352D] px-6 py-4 font-bold text-[#24352D] transition hover:bg-[#24352D] hover:text-white"
+                >
+                  Explore More Equipment
+                  <ArrowRight size={19} />
+                </Link>
 
                 <p className="mt-4 text-center text-xs leading-5 text-gray-400">
                   {isFeatured
                     ? "This is a featured demonstration listing. Live booking is available through approved database listings."
-                    : "Booking and payment options will be connected in the next step."}
+                    : "Your booking will be confirmed after successful demo payment."}
                 </p>
 
               </div>

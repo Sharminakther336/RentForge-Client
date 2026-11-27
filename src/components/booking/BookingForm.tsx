@@ -50,7 +50,9 @@ export default function BookingForm({
     }));
   };
 
-  const handleBooking = async (event: FormEvent<HTMLFormElement>) => {
+  const handleBooking = async (
+    event: FormEvent<HTMLFormElement>
+  ) => {
     event.preventDefault();
     setError("");
 
@@ -61,8 +63,13 @@ export default function BookingForm({
       return;
     }
 
-    if (equipmentId.startsWith("featured-") || !/^[a-fA-F0-9]{24}$/.test(equipmentId)) {
-      setError("This featured equipment cannot be booked. Please select an approved equipment listing.");
+    if (
+      equipmentId.startsWith("featured-") ||
+      !/^[a-fA-F0-9]{24}$/.test(equipmentId)
+    ) {
+      setError(
+        "This featured equipment cannot be booked. Please select an approved equipment listing."
+      );
       return;
     }
 
@@ -87,7 +94,9 @@ export default function BookingForm({
       availableQuantity !== undefined &&
       quantity > availableQuantity
     ) {
-      setError(`Maximum available quantity is ${availableQuantity}.`);
+      setError(
+        `Maximum available quantity is ${availableQuantity}.`
+      );
       return;
     }
 
@@ -113,7 +122,11 @@ export default function BookingForm({
 
       const data = await response.json();
 
-      if (!response.ok || !data.success || !data.bookingIntent?.id) {
+      if (
+        !response.ok ||
+        !data.success ||
+        !data.bookingIntent?.id
+      ) {
         throw new Error(
           data.message || "Unable to create booking request."
         );
@@ -140,13 +153,17 @@ export default function BookingForm({
     <div className="mt-7 rounded-2xl border border-[#E9E0D2] bg-white p-6 shadow-sm sm:p-7">
       <div className="flex items-center gap-3">
         <div className="rounded-xl bg-[#F5F1E8] p-3">
-          <CalendarDays className="text-[#C98B52]" size={23} />
+          <CalendarDays
+            className="text-[#C98B52]"
+            size={23}
+          />
         </div>
 
         <div>
           <h3 className="text-xl font-bold text-[#24352D]">
             Book This Equipment
           </h3>
+
           <p className="mt-1 text-sm text-gray-500">
             Complete your rental details
           </p>
@@ -154,21 +171,29 @@ export default function BookingForm({
       </div>
 
       <div className="mt-5 rounded-xl bg-[#F5F1E8] p-4">
-        <p className="text-sm text-gray-500">{equipmentName}</p>
+        <p className="text-sm text-gray-500">
+          {equipmentName}
+        </p>
+
         <p className="mt-1 text-xl font-extrabold text-[#24352D]">
           ৳{Number(rentalPrice).toLocaleString("en-BD")}
+
           <span className="ml-1 text-sm font-medium text-gray-500">
             / {rentalType || "rental"}
           </span>
         </p>
       </div>
 
-      <form onSubmit={handleBooking} className="mt-6 space-y-5">
+      <form
+        onSubmit={handleBooking}
+        className="mt-6 space-y-5"
+      >
         <div className="grid gap-5 sm:grid-cols-2">
           <div>
             <label className="mb-2 block text-sm font-semibold text-[#24352D]">
               Rental Start Date *
             </label>
+
             <input
               type="date"
               required
@@ -185,6 +210,7 @@ export default function BookingForm({
             <label className="mb-2 block text-sm font-semibold text-[#24352D]">
               Rental End Date *
             </label>
+
             <input
               type="date"
               required
@@ -202,6 +228,7 @@ export default function BookingForm({
           <label className="mb-2 block text-sm font-semibold text-[#24352D]">
             Required Quantity *
           </label>
+
           <input
             type="number"
             required
@@ -213,6 +240,7 @@ export default function BookingForm({
             }
             className="w-full rounded-xl border border-[#E9E0D2] px-4 py-3 outline-none focus:border-[#C98B52]"
           />
+
           {availableQuantity !== undefined && (
             <p className="mt-1 text-xs text-gray-500">
               Available quantity: {availableQuantity}
@@ -224,6 +252,7 @@ export default function BookingForm({
           <label className="mb-2 block text-sm font-semibold text-[#24352D]">
             Contact Number *
           </label>
+
           <input
             type="tel"
             required
@@ -240,6 +269,7 @@ export default function BookingForm({
           <label className="mb-2 block text-sm font-semibold text-[#24352D]">
             Delivery Address *
           </label>
+
           <textarea
             required
             rows={3}
@@ -256,6 +286,7 @@ export default function BookingForm({
           <label className="mb-2 block text-sm font-semibold text-[#24352D]">
             Additional Notes (Optional)
           </label>
+
           <textarea
             rows={2}
             placeholder="Any special instructions..."
@@ -278,9 +309,11 @@ export default function BookingForm({
             size={18}
             className="mt-0.5 shrink-0 text-[#C98B52]"
           />
+
           <p className="text-xs leading-5 text-gray-600">
-            Your booking will be confirmed after successful demo payment.
-            No real money will be charged.
+            You will be redirected to Stripe's secure checkout
+            to complete your payment. This project is currently
+            using Stripe test mode.
           </p>
         </div>
 
@@ -291,7 +324,10 @@ export default function BookingForm({
         >
           {loading ? (
             <>
-              <LoaderCircle size={19} className="animate-spin" />
+              <LoaderCircle
+                size={19}
+                className="animate-spin"
+              />
               Processing...
             </>
           ) : (

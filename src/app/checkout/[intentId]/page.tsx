@@ -5,11 +5,11 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
-  CheckCircle2,
   CreditCard,
   ShieldCheck,
   Clock,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 
 const API_URL =
@@ -30,6 +30,12 @@ interface BookingIntent {
   expiresAt: string;
 }
 
+const formatUSD = (amount: number) =>
+  new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+
 export default function CheckoutPage() {
   const params = useParams<{ intentId: string }>();
   const intentId = params.intentId;
@@ -38,8 +44,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState(false);
-  const [bookingId, setBookingId] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     try {
@@ -63,6 +68,11 @@ export default function CheckoutPage() {
       }
 
       setBooking(parsed);
+
+      const query = new URLSearchParams(window.location.search);
+      if (query.get("canceled") === "1") {
+        setNotice("Payment was canceled. You can try again.");
+      }
     } catch {
       setError("Unable to load booking information.");
     } finally {
@@ -70,7 +80,7 @@ export default function CheckoutPage() {
     }
   }, [intentId]);
 
-  const handlePayment = async (outcome: "success" | "failed") => {
+  const handlePayment = async () => {
     if (!booking || processing) return;
 
     const token = localStorage.getItem("rentforge_token");
@@ -82,42 +92,35 @@ export default function CheckoutPage() {
 
     setProcessing(true);
     setError("");
+    setNotice("");
 
     try {
       const response = await fetch(
-        `${API_URL}/api/bookings/${intentId}/mock-payment`,
+        `${API_URL}/api/stripe/create-checkout-session/${intentId}`,
         {
           method: "POST",
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ outcome }),
         }
       );
 
       const data = await response.json();
 
-      if (!response.ok || !data.success) {
+      if (!response.ok || !data.success || !data.checkoutUrl) {
         throw new Error(
-          data.message || "Payment processing failed."
+          data.message || "Unable to create Stripe checkout session."
         );
       }
 
-      if (outcome === "success") {
-        setSuccess(true);
-        setBookingId(data.bookingId || "");
-        sessionStorage.removeItem("rentforge_checkout");
-      } else {
-        setError(data.message || "Demo payment failed.");
-      }
+      window.location.assign(data.checkoutUrl);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : "Something went wrong."
+          : "Something went wrong. Please try again."
       );
-    } finally {
       setProcessing(false);
     }
   };
@@ -125,37 +128,8 @@ export default function CheckoutPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#F8FAF9]">
-        <p className="text-gray-600">Loading checkout...</p>
-      </div>
-    );
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-[#F8FAF9] flex items-center justify-center p-5">
-        <div className="bg-white max-w-lg w-full rounded-2xl p-8 text-center shadow-sm">
-          <CheckCircle2
-            size={64}
-            className="text-green-500 mx-auto mb-5"
-          />
-          <h1 className="text-3xl font-bold text-[#24352D] mb-3">
-            Booking Confirmed!
-          </h1>
-          <p className="text-gray-600 mb-5">
-            Your demo payment was successful. Your booking is confirmed.
-          </p>
-          {bookingId && (
-            <p className="text-sm text-gray-500 mb-6 break-all">
-              Booking ID: {bookingId}
-            </p>
-          )}
-          <Link
-            href="/dashboard/customer"
-            className="inline-block bg-[#24352D] text-white px-7 py-3 rounded-lg font-semibold hover:bg-[#344A3F]"
-          >
-            Go to My Dashboard
-          </Link>
-        </div>
+        <Loader2 className="animate-spin text-[#24352D]" size={35} />
+        <p className="ml-3 text-gray-600">Loading checkout...</p>
       </div>
     );
   }
@@ -193,11 +167,13 @@ export default function CheckoutPage() {
           <p className="text-[#C98B52] font-semibold mb-2">
             RENTFORGE CHECKOUT
           </p>
+
           <h1 className="text-3xl md:text-4xl font-bold text-[#24352D]">
             Complete Your Booking
           </h1>
+
           <p className="text-gray-500 mt-2">
-            Review your rental details and complete demo payment.
+            Review your rental details and complete your secure payment.
           </p>
         </div>
 
@@ -211,7 +187,8 @@ export default function CheckoutPage() {
               <h3 className="text-lg font-bold text-gray-800">
                 {booking.equipmentName}
               </h3>
-              <p className="text-sm text-gray-500 mt-1">
+
+              <p className="text-sm text-gray-500 mt-1 break-all">
                 Booking ID: {booking.id}
               </p>
             </div>
@@ -233,16 +210,12 @@ export default function CheckoutPage() {
 
               <div>
                 <p className="text-gray-500 mb-1">Rental Duration</p>
-                <p className="font-semibold">
-                  {booking.totalDays} days
-                </p>
+                <p className="font-semibold">{booking.totalDays} days</p>
               </div>
 
               <div>
                 <p className="text-gray-500 mb-1">Rental Type</p>
-                <p className="font-semibold">
-                  {booking.rentalType}
-                </p>
+                <p className="font-semibold">{booking.rentalType}</p>
               </div>
 
               <div>
@@ -255,23 +228,31 @@ export default function CheckoutPage() {
               <div>
                 <p className="text-gray-500 mb-1">Unit Price</p>
                 <p className="font-semibold">
-                  ৳{Number(booking.unitPrice).toLocaleString()}
+                  {formatUSD(Number(booking.unitPrice))}
                 </p>
               </div>
             </div>
 
             <div className="mt-8 bg-[#F8FAF9] rounded-xl p-5">
               <div className="flex items-center gap-3 mb-3">
-                <ShieldCheck className="text-[#C98B52]" />
+                <ShieldCheck className="text-[#C98B52]" size={24} />
                 <h3 className="font-semibold text-[#24352D]">
-                  Demo Payment Notice
+                  Secure Stripe Payment
                 </h3>
               </div>
+
               <p className="text-sm text-gray-600">
-                This is a demonstration payment system.
-                No real money will be charged.
+                You will be redirected to Stripe&apos;s secure checkout
+                page to complete your payment. This integration uses
+                Stripe Test Mode during development.
               </p>
             </div>
+
+            {notice && (
+              <div className="mt-5 p-4 rounded-lg bg-yellow-50 text-yellow-800 text-sm">
+                {notice}
+              </div>
+            )}
 
             {error && (
               <div className="mt-5 p-4 rounded-lg bg-red-50 text-red-700 text-sm">
@@ -288,7 +269,7 @@ export default function CheckoutPage() {
             <div className="flex items-center gap-3 mb-6">
               <CreditCard className="text-[#C98B52]" size={25} />
               <span className="font-semibold text-gray-700">
-                Demo Payment
+                Stripe Checkout
               </span>
             </div>
 
@@ -297,16 +278,17 @@ export default function CheckoutPage() {
                 <span className="text-gray-500">Duration</span>
                 <span>{booking.totalDays} days</span>
               </div>
+
               <div className="flex justify-between">
                 <span className="text-gray-500">Quantity</span>
                 <span>{booking.requiredQuantity}</span>
               </div>
             </div>
 
-            <div className="flex justify-between items-center py-5">
+            <div className="flex justify-between items-center py-5 gap-3">
               <span className="font-bold text-gray-800">Total Amount</span>
               <span className="text-2xl font-bold text-[#24352D]">
-                ৳{Number(booking.totalAmount).toLocaleString()}
+                {formatUSD(Number(booking.totalAmount))}
               </span>
             </div>
 
@@ -317,19 +299,21 @@ export default function CheckoutPage() {
             </div>
 
             <button
-              onClick={() => handlePayment("success")}
+              onClick={handlePayment}
               disabled={processing || expired}
-              className="w-full bg-[#24352D] text-white py-3 rounded-lg font-semibold hover:bg-[#344A3F] disabled:opacity-50"
+              className="w-full bg-[#24352D] text-white py-3 rounded-lg font-semibold hover:bg-[#344A3F] disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              {processing ? "Processing..." : "Pay Now (Demo)"}
-            </button>
-
-            <button
-              onClick={() => handlePayment("failed")}
-              disabled={processing || expired}
-              className="w-full mt-3 border border-red-300 text-red-600 py-3 rounded-lg font-semibold hover:bg-red-50 disabled:opacity-50"
-            >
-              Simulate Failed Payment
+              {processing ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Redirecting to Stripe...
+                </>
+              ) : (
+                <>
+                  <CreditCard size={18} />
+                  Pay Now with Stripe
+                </>
+              )}
             </button>
 
             {expired && (
@@ -339,7 +323,7 @@ export default function CheckoutPage() {
             )}
 
             <p className="text-center text-xs text-gray-400 mt-5">
-              Demo only · No real transaction
+              Secure payment powered by Stripe
             </p>
           </div>
         </div>

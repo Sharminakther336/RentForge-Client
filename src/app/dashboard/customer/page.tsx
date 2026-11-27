@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
@@ -34,8 +33,11 @@ export default function CustomerDashboard() {
   const router = useRouter();
 
   const [tab, setTab] = useState("overview");
+  const [rentalSearch, setRentalSearch] = useState("");
+  const [paymentFilter, setPaymentFilter] = useState("all");
   const [profile, setProfile] = useState<Profile>({});
   const [rentals, setRentals] = useState<Rental[]>([]);
+
   const [form, setForm] = useState({
     name: "",
     photo: "",
@@ -229,15 +231,42 @@ export default function CustomerDashboard() {
   const money = (value?: number) =>
     `৳${Number(value || 0).toLocaleString("en-BD")}`;
 
+  // Paid Rentals
   const paidRentals = rentals.filter(
     (item) => item.paymentStatus?.toLowerCase() === "paid"
   );
 
+  // Total Spent
   const totalSpent = paidRentals.reduce(
     (sum, item) => sum + Number(item.totalAmount || 0),
     0
   );
 
+  // Search, Filter and Sort Rental History
+  const filteredRentals = [...rentals]
+    .filter((item) =>
+      (item.equipmentName || "Equipment")
+        .toLowerCase()
+        .includes(rentalSearch.trim().toLowerCase())
+    )
+    .filter((item) =>
+      paymentFilter === "all"
+        ? true
+        : (item.paymentStatus || "unknown").toLowerCase() === paymentFilter
+    )
+    .sort((a, b) => {
+      const dateA = new Date(
+        a.createdAt || a.rentalStartDate || 0
+      ).getTime();
+
+      const dateB = new Date(
+        b.createdAt || b.rentalStartDate || 0
+      ).getTime();
+
+      return dateB - dateA;
+    });
+
+  // Dashboard Tabs
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "rentals", label: "My Rentals" },
@@ -245,6 +274,7 @@ export default function CustomerDashboard() {
     { id: "profile", label: "My Profile" },
   ];
 
+  // Loading Screen
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#F5F1E8]">
@@ -271,11 +301,17 @@ export default function CustomerDashboard() {
           </Link>
 
           <nav className="flex flex-wrap items-center gap-3">
-            <Link href="/" className="text-sm hover:text-[#C98B52]">
+            <Link
+              href="/"
+              className="text-sm hover:text-[#C98B52]"
+            >
               Home
             </Link>
 
-            <Link href="/equipment" className="text-sm hover:text-[#C98B52]">
+            <Link
+              href="/equipment"
+              className="text-sm hover:text-[#C98B52]"
+            >
               Equipment
             </Link>
 
@@ -346,21 +382,30 @@ export default function CustomerDashboard() {
             <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
 
               <div className="rounded-2xl border border-[#E9E0D2] bg-white p-6 shadow-sm">
-                <p className="text-sm text-gray-500">Total Rentals</p>
+                <p className="text-sm text-gray-500">
+                  Total Rentals
+                </p>
+
                 <h2 className="mt-3 text-3xl font-extrabold">
                   {rentals.length}
                 </h2>
               </div>
 
               <div className="rounded-2xl border border-[#E9E0D2] bg-white p-6 shadow-sm">
-                <p className="text-sm text-gray-500">Paid Rentals</p>
+                <p className="text-sm text-gray-500">
+                  Paid Rentals
+                </p>
+
                 <h2 className="mt-3 text-3xl font-extrabold text-green-700">
                   {paidRentals.length}
                 </h2>
               </div>
 
               <div className="rounded-2xl border border-[#E9E0D2] bg-white p-6 shadow-sm">
-                <p className="text-sm text-gray-500">Total Paid</p>
+                <p className="text-sm text-gray-500">
+                  Total Paid
+                </p>
+
                 <h2 className="mt-3 text-3xl font-extrabold text-[#C98B52]">
                   {money(totalSpent)}
                 </h2>
@@ -416,7 +461,8 @@ export default function CustomerDashboard() {
                         </p>
 
                         <p className="mt-1 text-xs text-gray-500">
-                          {formatDate(item.rentalStartDate)} – {formatDate(item.rentalEndDate)}
+                          {formatDate(item.rentalStartDate)} –{" "}
+                          {formatDate(item.rentalEndDate)}
                         </p>
                       </div>
 
@@ -446,6 +492,54 @@ export default function CustomerDashboard() {
               </p>
             </div>
 
+            {/* Rental History Search and Payment Filter */}
+            <div className="grid gap-4 border-b border-[#E9E0D2] p-5 sm:grid-cols-2">
+
+              <div>
+                <label
+                  htmlFor="rental-search"
+                  className="mb-2 block text-sm font-semibold text-[#24352D]"
+                >
+                  Search Equipment
+                </label>
+
+                <input
+                  id="rental-search"
+                  type="search"
+                  value={rentalSearch}
+                  onChange={(event) =>
+                    setRentalSearch(event.target.value)
+                  }
+                  placeholder="Type an equipment name..."
+                  className="w-full rounded-xl border border-[#E9E0D2] bg-white px-4 py-3 outline-none transition focus:border-[#C98B52]"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="payment-filter"
+                  className="mb-2 block text-sm font-semibold text-[#24352D]"
+                >
+                  Filter by Payment
+                </label>
+
+                <select
+                  id="payment-filter"
+                  value={paymentFilter}
+                  onChange={(event) =>
+                    setPaymentFilter(event.target.value)
+                  }
+                  className="w-full rounded-xl border border-[#E9E0D2] bg-white px-4 py-3 outline-none transition focus:border-[#C98B52]"
+                >
+                  <option value="all">All Payments</option>
+                  <option value="paid">Paid</option>
+                  <option value="pending">Pending</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </div>
+
+            </div>
+
             {rentals.length === 0 ? (
               <div className="p-12 text-center text-gray-500">
                 No confirmed rentals found.
@@ -467,7 +561,7 @@ export default function CustomerDashboard() {
                   </thead>
 
                   <tbody>
-                    {rentals.map((item, index) => (
+                    {filteredRentals.map((item, index) => (
                       <tr
                         key={item._id || index}
                         className="border-t border-gray-100"
@@ -493,14 +587,32 @@ export default function CustomerDashboard() {
                         </td>
 
                         <td className="px-5 py-4 capitalize">
-                          {(item.paymentStatus || "unknown").replace(/_/g, " ")}
+                          {(item.paymentStatus || "unknown").replace(
+                            /_/g,
+                            " "
+                          )}
                         </td>
 
                         <td className="px-5 py-4 capitalize">
-                          {(item.bookingStatus || item.status || "unknown").replace(/_/g, " ")}
+                          {(
+                            item.bookingStatus ||
+                            item.status ||
+                            "unknown"
+                          ).replace(/_/g, " ")}
                         </td>
                       </tr>
                     ))}
+
+                    {filteredRentals.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-5 py-10 text-center text-gray-500"
+                        >
+                          No rentals match your search or payment filter.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
 
                 </table>
@@ -547,7 +659,10 @@ export default function CustomerDashboard() {
               Update your personal information.
             </p>
 
-            <form onSubmit={saveProfile} className="mt-6 space-y-5">
+            <form
+              onSubmit={saveProfile}
+              className="mt-6 space-y-5"
+            >
 
               <div>
                 <label className="mb-2 block text-sm font-semibold">
@@ -633,6 +748,7 @@ export default function CustomerDashboard() {
           </section>
         )}
 
+        {/* Footer */}
         <footer className="mt-10 border-t border-[#E9E0D2] pt-6 text-sm text-gray-500">
           © 2026 RentForge. Customer Workspace.
         </footer>

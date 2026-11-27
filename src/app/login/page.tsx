@@ -13,9 +13,16 @@ import {
   ArrowRight,
   ShieldCheck,
 } from "lucide-react";
+import { GoogleOAuthProvider, GoogleLogin } from "@react-oauth/google";
 
 import Navbar from "@/components/navbar/Navbar";
 import Footer from "@/components/footer/Footer";
+
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000";
+
+const GOOGLE_CLIENT_ID =
+  process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,9 +31,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Save user session
+  const saveUserSession = (data: any) => {
+    localStorage.setItem("rentforge_token", data.token);
+    localStorage.setItem("rentforge_user", JSON.stringify(data.user));
+
+    setSuccess("Login successful! Welcome to RentForge.");
+
+    router.replace("/");
+    router.refresh();
+  };
+
+  // Email and Password Login
   const handleLogin = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -36,19 +56,16 @@ export default function LoginPage() {
     try {
       setLoading(true);
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"}/api/auth/login`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            email: email.trim().toLowerCase(),
-            password,
-          }),
-        }
-      );
+      const response = await fetch(`${API_URL}/api/auth/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          password,
+        }),
+      });
 
       const data = await response.json();
 
@@ -56,15 +73,7 @@ export default function LoginPage() {
         throw new Error(data.message || "Login failed. Please try again.");
       }
 
-      // Save login information for local session handling
-      localStorage.setItem("rentforge_token", data.token);
-      localStorage.setItem("rentforge_user", JSON.stringify(data.user));
-
-      setSuccess("Login successful! Welcome to RentForge.");
-
-      // Return to homepage
-      router.replace("/");
-      router.refresh();
+      saveUserSession(data);
     } catch (err) {
       setError(
         err instanceof Error
@@ -76,7 +85,45 @@ export default function LoginPage() {
     }
   };
 
-  return (
+  // Google Login
+  const handleGoogleSuccess = async (credential: string) => {
+    setError("");
+    setSuccess("");
+
+    try {
+      setGoogleLoading(true);
+
+      const response = await fetch(`${API_URL}/api/auth/google`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          credential,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.message || "Google login failed. Please try again."
+        );
+      }
+
+      saveUserSession(data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Google login failed. Please try again."
+      );
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const pageContent = (
     <>
       <Navbar />
 
@@ -169,6 +216,7 @@ export default function LoginPage() {
                 </div>
               )}
 
+              {/* Email Login Form */}
               <form onSubmit={handleLogin} className="space-y-6">
 
                 {/* Email */}
@@ -225,7 +273,9 @@ export default function LoginPage() {
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       className="text-gray-400 transition hover:text-[#24352D]"
-                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      aria-label={
+                        showPassword ? "Hide password" : "Show password"
+                      }
                     >
                       {showPassword ? (
                         <EyeOff size={19} />
@@ -239,33 +289,56 @@ export default function LoginPage() {
                 {/* Login Button */}
                 <button
                   type="submit"
-                  disabled={loading}
+                  disabled={loading || googleLoading}
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#24352D] px-5 py-4 text-sm font-bold text-white transition hover:bg-[#344B40] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {loading ? "Signing In..." : "Sign In"}
-
                   {!loading && <ArrowRight size={18} />}
                 </button>
 
               </form>
 
-              {/* Google Login Placeholder */}
+              {/* Divider */}
               <div className="my-7 flex items-center gap-4">
                 <div className="h-px flex-1 bg-gray-200" />
                 <span className="text-xs text-gray-400">OR</span>
                 <div className="h-px flex-1 bg-gray-200" />
               </div>
 
-              <button
-                type="button"
-                onClick={() =>
-                  setError("Google sign-in is not configured yet.")
-                }
-                className="flex w-full items-center justify-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-4 text-sm font-semibold text-[#24352D] transition hover:bg-gray-50"
-              >
-                <span className="text-lg font-bold">G</span>
-                Continue with Google
-              </button>
+              {/* Google Login */}
+              <div className="flex w-full justify-center">
+                {GOOGLE_CLIENT_ID ? (
+                  <div className="w-full">
+                    {googleLoading ? (
+                      <div className="rounded-xl border border-gray-200 py-4 text-center text-sm text-gray-500">
+                        Signing in with Google...
+                      </div>
+                    ) : (
+                      <GoogleLogin
+                        onSuccess={(response) => {
+                          if (response.credential) {
+                            handleGoogleSuccess(response.credential);
+                          } else {
+                            setError("Google did not return a credential.");
+                          }
+                        }}
+                        onError={() => {
+                          setError("Google sign-in was unsuccessful.");
+                        }}
+                        theme="outline"
+                        size="large"
+                        text="continue_with"
+                        shape="rectangular"
+                        width="350"
+                      />
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-sm text-red-500">
+                    Google Client ID is not configured.
+                  </p>
+                )}
+              </div>
 
               {/* Register Link */}
               <p className="mt-8 text-center text-sm text-gray-500">
@@ -290,4 +363,14 @@ export default function LoginPage() {
       <Footer />
     </>
   );
+
+  // Google OAuth Provider
+  return GOOGLE_CLIENT_ID ? (
+    <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
+      {pageContent}
+    </GoogleOAuthProvider>
+  ) : (
+    pageContent
+  );
 }
+

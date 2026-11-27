@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useCallback, useEffect, useState, FormEvent } from "react";
@@ -90,6 +89,7 @@ export default function MyEquipmentPage() {
   const [success, setSuccess] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
 
   const [selected, setSelected] = useState<Equipment | null>(null);
   const [viewing, setViewing] = useState(false);
@@ -101,6 +101,7 @@ export default function MyEquipmentPage() {
 
   const getToken = () => localStorage.getItem("rentforge_token");
 
+  // Load Owner Equipment
   const loadEquipment = useCallback(async () => {
     const token = getToken();
 
@@ -143,6 +144,7 @@ export default function MyEquipmentPage() {
     }
   }, [router]);
 
+  // Owner Authentication
   useEffect(() => {
     const userText = localStorage.getItem("rentforge_user");
 
@@ -165,20 +167,51 @@ export default function MyEquipmentPage() {
     }
   }, [router, loadEquipment]);
 
-  const filteredEquipment = equipment.filter((item) => {
-    const matchesSearch =
-      item.name.toLowerCase().includes(search.toLowerCase()) ||
-      item.category.toLowerCase().includes(search.toLowerCase()) ||
-      item.location.toLowerCase().includes(search.toLowerCase());
+  // Search, Filter and Sort
+  const filteredEquipment = [...equipment]
+    .filter((item) => {
+      const term = search.trim().toLowerCase();
 
-    const matchesStatus =
-      statusFilter === "all" || item.status === statusFilter;
+      const matchesSearch =
+        (item.name || "").toLowerCase().includes(term) ||
+        (item.category || "").toLowerCase().includes(term) ||
+        (item.location || "").toLowerCase().includes(term);
 
-    return matchesSearch && matchesStatus;
-  });
+      const matchesStatus =
+        statusFilter === "all" || item.status === statusFilter;
 
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
+
+      switch (sortBy) {
+        case "oldest":
+          return dateA - dateB;
+
+        case "price-low":
+          return a.rentalPrice - b.rentalPrice;
+
+        case "price-high":
+          return b.rentalPrice - a.rentalPrice;
+
+        case "quantity":
+          return b.availableQuantity - a.availableQuantity;
+
+        case "name":
+          return a.name.localeCompare(b.name);
+
+        case "newest":
+        default:
+          return dateB - dateA;
+      }
+    });
+
+  // Open Edit Modal
   const openEdit = (item: Equipment) => {
     setSelected(item);
+
     setForm({
       name: item.name,
       description: item.description,
@@ -200,6 +233,7 @@ export default function MyEquipmentPage() {
     setSuccess("");
   };
 
+  // Close Modal
   const closeModal = () => {
     setSelected(null);
     setViewing(false);
@@ -207,8 +241,11 @@ export default function MyEquipmentPage() {
     setForm(emptyForm);
   };
 
+  // Form Change
   const handleFormChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
     setForm((previous) => ({
       ...previous,
@@ -216,6 +253,7 @@ export default function MyEquipmentPage() {
     }));
   };
 
+  // Update Equipment
   const handleUpdate = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -279,6 +317,7 @@ export default function MyEquipmentPage() {
     }
   };
 
+  // Delete Equipment
   const handleDelete = async (item: Equipment) => {
     const confirmed = window.confirm(
       `Are you sure you want to delete "${item.name}"?`
@@ -325,15 +364,18 @@ export default function MyEquipmentPage() {
     }
   };
 
+  // Common Input Style
   const inputClass =
     "w-full rounded-xl border border-[#E5DED2] bg-[#FAF9F6] px-4 py-3 text-sm text-[#24352D] outline-none transition focus:border-[#C98B52]";
 
+  // Status Badge Style
   const statusStyle = (status: string) => {
     if (status === "approved") return "bg-green-50 text-green-700";
     if (status === "rejected") return "bg-red-50 text-red-600";
     return "bg-amber-50 text-amber-700";
   };
 
+  // Equipment Statistics
   const totalApproved = equipment.filter(
     (item) => item.status === "approved"
   ).length;
@@ -352,7 +394,11 @@ export default function MyEquipmentPage() {
       {/* Header */}
       <header className="sticky top-0 z-30 border-b border-[#E9E0D2] bg-white px-5 py-5 sm:px-8">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
-          <Link href="/dashboard/owner" className="flex items-center gap-3">
+
+          <Link
+            href="/dashboard/owner"
+            className="flex items-center gap-3"
+          >
             <div className="rounded-xl bg-[#24352D] p-2.5 text-white">
               <Package size={23} />
             </div>
@@ -369,6 +415,7 @@ export default function MyEquipmentPage() {
             <ArrowLeft size={18} />
             Dashboard
           </Link>
+
         </div>
       </header>
 
@@ -376,6 +423,7 @@ export default function MyEquipmentPage() {
 
         {/* Title */}
         <div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
+
           <div>
             <p className="mb-2 text-sm font-bold uppercase tracking-[2px] text-[#C98B52]">
               Owner Workspace
@@ -397,6 +445,7 @@ export default function MyEquipmentPage() {
             <Plus size={20} />
             Add Equipment
           </Link>
+
         </div>
 
         {/* Feedback */}
@@ -415,6 +464,7 @@ export default function MyEquipmentPage() {
 
         {/* Statistics */}
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
           {[
             { label: "Total Equipment", value: equipment.length },
             { label: "Approved", value: totalApproved },
@@ -426,22 +476,27 @@ export default function MyEquipmentPage() {
               className="rounded-2xl border border-[#E9E0D2] bg-white p-5 shadow-sm"
             >
               <p className="text-sm text-gray-500">{stat.label}</p>
-              <p className="mt-3 text-3xl font-extrabold">{stat.value}</p>
+              <p className="mt-3 text-3xl font-extrabold">
+                {stat.value}
+              </p>
             </div>
           ))}
+
         </div>
 
-        {/* Search and Filter */}
-        <div className="mb-6 flex flex-col gap-4 rounded-2xl border border-[#E9E0D2] bg-white p-5 md:flex-row">
-          <div className="relative flex-1">
+        {/* Search, Filter and Sort */}
+        <div className="mb-6 grid gap-4 rounded-2xl border border-[#E9E0D2] bg-white p-5 md:grid-cols-2 xl:grid-cols-4">
+
+          <div className="relative">
             <Search
               size={19}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"
             />
+
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by equipment, category or location..."
+              placeholder="Search equipment..."
               className={`${inputClass} pl-11`}
             />
           </div>
@@ -449,12 +504,27 @@ export default function MyEquipmentPage() {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className={`${inputClass} md:w-52`}
+            className={inputClass}
+            aria-label="Filter by status"
           >
             <option value="all">All Status</option>
             <option value="approved">Approved</option>
             <option value="pending">Pending</option>
             <option value="rejected">Rejected</option>
+          </select>
+
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className={inputClass}
+            aria-label="Sort equipment"
+          >
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="price-low">Price: Low to High</option>
+            <option value="price-high">Price: High to Low</option>
+            <option value="quantity">Most Available</option>
+            <option value="name">Name: A to Z</option>
           </select>
 
           <button
@@ -465,6 +535,7 @@ export default function MyEquipmentPage() {
             <RefreshCw size={17} />
             Refresh
           </button>
+
         </div>
 
         {/* Equipment List */}
@@ -472,7 +543,10 @@ export default function MyEquipmentPage() {
 
           <div className="flex items-center justify-between border-b border-[#E9E0D2] px-6 py-5">
             <div>
-              <h2 className="text-lg font-bold">Equipment Listings</h2>
+              <h2 className="text-lg font-bold">
+                Equipment Listings
+              </h2>
+
               <p className="mt-1 text-sm text-gray-500">
                 {filteredEquipment.length} equipment found
               </p>
@@ -483,6 +557,7 @@ export default function MyEquipmentPage() {
             <div className="flex min-h-64 items-center justify-center">
               <div className="text-center">
                 <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-[#E9E0D2] border-t-[#24352D]" />
+
                 <p className="mt-4 text-sm text-gray-500">
                   Loading your equipment...
                 </p>
@@ -510,13 +585,16 @@ export default function MyEquipmentPage() {
             </div>
           ) : (
             <div className="divide-y divide-[#E9E0D2]">
+
               {filteredEquipment.map((item) => (
                 <div
                   key={item._id}
                   className="flex flex-col gap-5 p-5 transition hover:bg-[#FAF9F6] sm:p-6 lg:flex-row lg:items-center lg:justify-between"
                 >
+
                   {/* Equipment Info */}
                   <div className="flex min-w-0 items-start gap-4">
+
                     <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-[#E9EDE5]">
                       {item.image ? (
                         <img
@@ -525,12 +603,17 @@ export default function MyEquipmentPage() {
                           className="h-full w-full object-cover"
                         />
                       ) : (
-                        <Package size={32} className="text-[#24352D]" />
+                        <Package
+                          size={32}
+                          className="text-[#24352D]"
+                        />
                       )}
                     </div>
 
                     <div className="min-w-0">
-                      <h3 className="text-lg font-bold">{item.name}</h3>
+                      <h3 className="text-lg font-bold">
+                        {item.name}
+                      </h3>
 
                       <p className="mt-1 text-sm text-gray-500">
                         {item.category}
@@ -542,6 +625,7 @@ export default function MyEquipmentPage() {
                       </p>
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
+
                         <span
                           className={`rounded-full px-3 py-1 text-xs font-bold capitalize ${statusStyle(item.status)}`}
                         >
@@ -551,22 +635,26 @@ export default function MyEquipmentPage() {
                         <span className="rounded-full bg-[#F5F1E8] px-3 py-1 text-xs font-semibold text-[#24352D]">
                           Quantity: {item.availableQuantity}
                         </span>
+
                       </div>
                     </div>
                   </div>
 
                   {/* Price and Actions */}
                   <div className="flex flex-wrap items-center justify-between gap-4 lg:justify-end">
+
                     <div className="min-w-24">
                       <p className="text-xl font-extrabold">
                         ৳{item.rentalPrice.toLocaleString("en-BD")}
                       </p>
+
                       <p className="text-xs text-gray-500">
                         Per {item.rentalType}
                       </p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
+
                       <button
                         type="button"
                         onClick={() => {
@@ -596,12 +684,17 @@ export default function MyEquipmentPage() {
                         className="flex items-center gap-2 rounded-lg border border-red-200 px-3 py-2 text-xs font-bold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
                       >
                         <Trash2 size={16} />
-                        {deletingId === item._id ? "Deleting..." : "Delete"}
+
+                        {deletingId === item._id
+                          ? "Deleting..."
+                          : "Delete"}
                       </button>
+
                     </div>
                   </div>
                 </div>
               ))}
+
             </div>
           )}
         </div>
@@ -609,15 +702,24 @@ export default function MyEquipmentPage() {
         <p className="mt-8 text-center text-sm text-gray-400">
           © 2026 RentForge. Owner Equipment Management.
         </p>
+
       </div>
 
       {/* View Details Modal */}
       {viewing && selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+
           <div className="my-8 w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+
             <div className="mb-5 flex items-center justify-between">
-              <h2 className="text-xl font-bold">Equipment Details</h2>
-              <button onClick={closeModal} aria-label="Close details">
+              <h2 className="text-xl font-bold">
+                Equipment Details
+              </h2>
+
+              <button
+                onClick={closeModal}
+                aria-label="Close details"
+              >
                 <X size={23} />
               </button>
             </div>
@@ -630,19 +732,58 @@ export default function MyEquipmentPage() {
               />
             )}
 
-            <h3 className="text-2xl font-extrabold">{selected.name}</h3>
+            <h3 className="text-2xl font-extrabold">
+              {selected.name}
+            </h3>
+
             <p className="mt-2 text-sm text-gray-500">
               {selected.description}
             </p>
 
             <div className="mt-5 grid grid-cols-2 gap-4 text-sm">
-              <p><strong>Category:</strong><br />{selected.category}</p>
-              <p><strong>Location:</strong><br />{selected.location}</p>
-              <p><strong>Price:</strong><br />৳{selected.rentalPrice} / {selected.rentalType}</p>
-              <p><strong>Quantity:</strong><br />{selected.availableQuantity}</p>
-              <p><strong>Condition:</strong><br />{selected.condition || "Not specified"}</p>
-              <p><strong>Brand / Model:</strong><br />{selected.brand || "—"} {selected.model || ""}</p>
-              <p className="col-span-2"><strong>Rental Terms:</strong><br />{selected.rentalTerms || "Not specified"}</p>
+
+              <p>
+                <strong>Category:</strong>
+                <br />
+                {selected.category}
+              </p>
+
+              <p>
+                <strong>Location:</strong>
+                <br />
+                {selected.location}
+              </p>
+
+              <p>
+                <strong>Price:</strong>
+                <br />
+                ৳{selected.rentalPrice} / {selected.rentalType}
+              </p>
+
+              <p>
+                <strong>Quantity:</strong>
+                <br />
+                {selected.availableQuantity}
+              </p>
+
+              <p>
+                <strong>Condition:</strong>
+                <br />
+                {selected.condition || "Not specified"}
+              </p>
+
+              <p>
+                <strong>Brand / Model:</strong>
+                <br />
+                {selected.brand || "—"} {selected.model || ""}
+              </p>
+
+              <p className="col-span-2">
+                <strong>Rental Terms:</strong>
+                <br />
+                {selected.rentalTerms || "Not specified"}
+              </p>
+
             </div>
 
             <div className="mt-6 flex justify-end">
@@ -653,6 +794,7 @@ export default function MyEquipmentPage() {
                 Close
               </button>
             </div>
+
           </div>
         </div>
       )}
@@ -660,23 +802,35 @@ export default function MyEquipmentPage() {
       {/* Edit Equipment Modal */}
       {editing && selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
+
           <div className="my-8 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8">
+
             <div className="mb-6 flex items-center justify-between">
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-[#C98B52]">
                   Owner Workspace
                 </p>
-                <h2 className="mt-1 text-2xl font-bold">Update Equipment</h2>
+
+                <h2 className="mt-1 text-2xl font-bold">
+                  Update Equipment
+                </h2>
               </div>
 
-              <button onClick={closeModal} aria-label="Close edit form">
+              <button
+                onClick={closeModal}
+                aria-label="Close edit form"
+              >
                 <X size={24} />
               </button>
             </div>
 
             <form onSubmit={handleUpdate} className="space-y-4">
+
               <div>
-                <label className="mb-2 block text-sm font-semibold">Equipment Name</label>
+                <label className="mb-2 block text-sm font-semibold">
+                  Equipment Name
+                </label>
+
                 <input
                   name="name"
                   value={form.name}
@@ -687,7 +841,10 @@ export default function MyEquipmentPage() {
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold">Description</label>
+                <label className="mb-2 block text-sm font-semibold">
+                  Description
+                </label>
+
                 <textarea
                   name="description"
                   value={form.description}
@@ -699,42 +856,104 @@ export default function MyEquipmentPage() {
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
+
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Category</label>
-                  <select name="category" value={form.category} onChange={handleFormChange} className={inputClass} required>
+                  <label className="mb-2 block text-sm font-semibold">
+                    Category
+                  </label>
+
+                  <select
+                    name="category"
+                    value={form.category}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                    required
+                  >
                     {CATEGORIES.map((category) => (
-                      <option key={category} value={category}>{category}</option>
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Location</label>
-                  <input name="location" value={form.location} onChange={handleFormChange} className={inputClass} required />
+                  <label className="mb-2 block text-sm font-semibold">
+                    Location
+                  </label>
+
+                  <input
+                    name="location"
+                    value={form.location}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                    required
+                  />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Rental Price</label>
-                  <input name="rentalPrice" type="number" min="1" value={form.rentalPrice} onChange={handleFormChange} className={inputClass} required />
+                  <label className="mb-2 block text-sm font-semibold">
+                    Rental Price
+                  </label>
+
+                  <input
+                    name="rentalPrice"
+                    type="number"
+                    min="1"
+                    value={form.rentalPrice}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                    required
+                  />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Rental Type</label>
-                  <select name="rentalType" value={form.rentalType} onChange={handleFormChange} className={inputClass}>
+                  <label className="mb-2 block text-sm font-semibold">
+                    Rental Type
+                  </label>
+
+                  <select
+                    name="rentalType"
+                    value={form.rentalType}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                  >
                     {RENTAL_TYPES.map((type) => (
-                      <option key={type} value={type}>{type}</option>
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Available Quantity</label>
-                  <input name="availableQuantity" type="number" min="1" step="1" value={form.availableQuantity} onChange={handleFormChange} className={inputClass} required />
+                  <label className="mb-2 block text-sm font-semibold">
+                    Available Quantity
+                  </label>
+
+                  <input
+                    name="availableQuantity"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={form.availableQuantity}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                    required
+                  />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Condition</label>
-                  <select name="condition" value={form.condition} onChange={handleFormChange} className={inputClass}>
+                  <label className="mb-2 block text-sm font-semibold">
+                    Condition
+                  </label>
+
+                  <select
+                    name="condition"
+                    value={form.condition}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                  >
                     <option value="">Select Condition</option>
                     <option value="Brand New">Brand New</option>
                     <option value="Excellent">Excellent</option>
@@ -744,27 +963,63 @@ export default function MyEquipmentPage() {
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Brand</label>
-                  <input name="brand" value={form.brand} onChange={handleFormChange} className={inputClass} />
+                  <label className="mb-2 block text-sm font-semibold">
+                    Brand
+                  </label>
+
+                  <input
+                    name="brand"
+                    value={form.brand}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                  />
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-semibold">Model</label>
-                  <input name="model" value={form.model} onChange={handleFormChange} className={inputClass} />
+                  <label className="mb-2 block text-sm font-semibold">
+                    Model
+                  </label>
+
+                  <input
+                    name="model"
+                    value={form.model}
+                    onChange={handleFormChange}
+                    className={inputClass}
+                  />
                 </div>
+
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold">Image URL</label>
-                <input name="image" type="url" value={form.image} onChange={handleFormChange} className={inputClass} />
+                <label className="mb-2 block text-sm font-semibold">
+                  Image URL
+                </label>
+
+                <input
+                  name="image"
+                  type="url"
+                  value={form.image}
+                  onChange={handleFormChange}
+                  className={inputClass}
+                />
               </div>
 
               <div>
-                <label className="mb-2 block text-sm font-semibold">Rental Terms</label>
-                <textarea name="rentalTerms" value={form.rentalTerms} onChange={handleFormChange} rows={3} className={inputClass} />
+                <label className="mb-2 block text-sm font-semibold">
+                  Rental Terms
+                </label>
+
+                <textarea
+                  name="rentalTerms"
+                  value={form.rentalTerms}
+                  onChange={handleFormChange}
+                  rows={3}
+                  className={inputClass}
+                />
               </div>
 
               <div className="flex flex-col-reverse gap-3 border-t border-[#E9E0D2] pt-5 sm:flex-row sm:justify-end">
+
                 <button
                   type="button"
                   onClick={closeModal}
@@ -781,11 +1036,13 @@ export default function MyEquipmentPage() {
                   <Save size={18} />
                   {saving ? "Saving..." : "Save Changes"}
                 </button>
+
               </div>
             </form>
           </div>
         </div>
       )}
+
     </main>
   );
 }
